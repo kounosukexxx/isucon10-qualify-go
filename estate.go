@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 
+	geo "github.com/kellydunn/golang-geo"
+
 	"github.com/labstack/echo"
 )
 
@@ -310,10 +312,20 @@ func searchEstateNazotte(c echo.Context) error {
 	}
 
 	estatesInPolygon := []Estate{}
-	coordinatesText := coordinates.coordinatesToText()
-	points := make([]string, 0, len(estatesInBoundingBox))
-	ids := make([]string, 0, len(estatesInBoundingBox))
+	points := make([]*geo.Point, 0, len(coordinates.Coordinates))
+	for _, c := range coordinates.Coordinates {
+		points = append(points, geo.NewPoint(c.Latitude, c.Longitude))
+	}
+	polygon := geo.NewPolygon(points)
+	// coordinatesText := coordinates.coordinatesToText()
 	for _, estate := range estatesInBoundingBox {
+		point := geo.NewPoint(estate.Latitude, estate.Longitude)
+		if polygon.Contains(point) {
+			estatesInPolygon = append(estatesInPolygon, estate)
+			if len(estatesInPolygon) == NazotteLimit {
+				break
+			}
+		}
 		// validatedEstate := Estate{}
 
 		// point := fmt.Sprintf("'POINT(%f %f)'", estate.Latitude, estate.Longitude)
@@ -333,20 +345,20 @@ func searchEstateNazotte(c echo.Context) error {
 		// 	}
 		// }
 
-		points = append(points, fmt.Sprintf("%f %f", estate.Latitude, estate.Longitude))
-		ids = append(ids, strconv.FormatInt(estate.ID, 10))
+		// points = append(points, fmt.Sprintf("%f %f", estate.Latitude, estate.Longitude))
+		// ids = append(ids, strconv.FormatInt(estate.ID, 10))
 	}
-	pointsText := fmt.Sprintf("'POINT((%s))'", strings.Join(points, ","))
-	idsText := fmt.Sprintf("%s", strings.Join(ids, ","))
-	query = fmt.Sprintf(`SELECT * FROM estate WHERE id IN (%s) AND ST_Contains(ST_PolygonFromText(%s), ST_GeomFromText(%s)) LIMIT 50`, idsText, coordinatesText, pointsText)
-	err = db.Select(&estatesInPolygon, query)
-	if err == sql.ErrNoRows {
-		c.Echo().Logger.Infof("select * from estate where latitude ...", err)
-		return c.JSON(http.StatusOK, EstateSearchResponse{Count: 0, Estates: []Estate{}})
-	} else if err != nil {
-		c.Echo().Logger.Errorf("database execution error : %v", err)
-		return c.NoContent(http.StatusInternalServerError)
-	}
+	// pointsText := fmt.Sprintf("'POINT((%s))'", strings.Join(points, ","))
+	// idsText := strings.Join(ids, ",")
+	// query = fmt.Sprintf(`SELECT * FROM estate WHERE id IN (%s) AND ST_Contains(ST_PolygonFromText(%s), ST_GeomFromText(%s)) LIMIT 50`, idsText, coordinatesText, pointsText)
+	// err = db.Select(&estatesInPolygon, query)
+	// if err == sql.ErrNoRows {
+	// 	c.Echo().Logger.Infof("select * from estate where latitude ...", err)
+	// 	return c.JSON(http.StatusOK, EstateSearchResponse{Count: 0, Estates: []Estate{}})
+	// } else if err != nil {
+	// 	c.Echo().Logger.Errorf("database execution error : %v", err)
+	// 	return c.NoContent(http.StatusInternalServerError)
+	// }
 
 	var re EstateSearchResponse
 	re.Estates = []Estate{}
