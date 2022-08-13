@@ -312,6 +312,7 @@ func searchEstateNazotte(c echo.Context) error {
 	estatesInPolygon := []Estate{}
 	coordinatesText := coordinates.coordinatesToText()
 	points := make([]string, 0, len(estatesInBoundingBox))
+	ids := make([]string, 0, len(estatesInBoundingBox))
 	for _, estate := range estatesInBoundingBox {
 		// validatedEstate := Estate{}
 
@@ -333,9 +334,11 @@ func searchEstateNazotte(c echo.Context) error {
 		// }
 
 		points = append(points, fmt.Sprintf("%f %f", estate.Latitude, estate.Longitude))
+		ids = append(ids, strconv.FormatInt(estate.ID, 10))
 	}
 	pointsText := fmt.Sprintf("'POINT((%s))'", strings.Join(points, ","))
-	query = fmt.Sprintf(`SELECT * FROM estate WHERE id = ? AND ST_Contains(ST_PolygonFromText(%s), ST_GeomFromText(%s))`, coordinatesText, pointsText)
+	idsText := fmt.Sprintf("%s", strings.Join(ids, ","))
+	query = fmt.Sprintf(`SELECT * FROM estate WHERE id IN (%s) AND ST_Contains(ST_PolygonFromText(%s), ST_GeomFromText(%s)) LIMIT 50`, idsText, coordinatesText, pointsText)
 	err = db.Select(&estatesInPolygon, query)
 	if err == sql.ErrNoRows {
 		c.Echo().Logger.Infof("select * from estate where latitude ...", err)
