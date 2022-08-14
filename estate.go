@@ -403,14 +403,19 @@ func postEstateRequestDocument(c echo.Context) error {
 	}
 
 	estate := Estate{}
-	query := `SELECT * FROM estate WHERE id = ?`
-	err = db.Get(&estate, query, id)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return c.NoContent(http.StatusNotFound)
+	_, ok = estateCache.Get(id)
+	if !ok {
+		query := `SELECT * FROM estate WHERE id = ?`
+		err = db.Get(&estate, query, id)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return c.NoContent(http.StatusNotFound)
+			}
+			c.Logger().Errorf("postEstateRequestDocument DB execution error : %v", err)
+			return c.NoContent(http.StatusInternalServerError)
 		}
-		c.Logger().Errorf("postEstateRequestDocument DB execution error : %v", err)
-		return c.NoContent(http.StatusInternalServerError)
+
+		estateCache.Set(id, estate)
 	}
 
 	return c.NoContent(http.StatusOK)
