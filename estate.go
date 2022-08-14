@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/isucon/isucon10-qualify/isuumo/helper"
 	geo "github.com/kellydunn/golang-geo"
 
 	"github.com/labstack/echo"
@@ -40,6 +41,8 @@ type EstateListResponse struct {
 	Estates []Estate `json:"estates"`
 }
 
+var estateCache = helper.NewCacheMap()
+
 func getEstateDetail(c echo.Context) error {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
@@ -48,14 +51,21 @@ func getEstateDetail(c echo.Context) error {
 	}
 
 	var estate Estate
-	err = db.Get(&estate, "SELECT * FROM estate WHERE id = ?", id)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			c.Echo().Logger.Infof("getEstateDetail estate id %v not found", id)
-			return c.NoContent(http.StatusNotFound)
+	estateInterface, ok := estateCache.Get(id)
+	if ok {
+		estate = estateInterface.(Estate)
+	} else {
+		err = db.Get(&estate, "SELECT * FROM estate WHERE id = ?", id)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				c.Echo().Logger.Infof("getEstateDetail estate id %v not found", id)
+				return c.NoContent(http.StatusNotFound)
+			}
+			c.Echo().Logger.Errorf("Database Execution error : %v", err)
+			return c.NoContent(http.StatusInternalServerError)
 		}
-		c.Echo().Logger.Errorf("Database Execution error : %v", err)
-		return c.NoContent(http.StatusInternalServerError)
+
+		estateCache.Set(id, estate)
 	}
 
 	return c.JSON(http.StatusOK, estate)
